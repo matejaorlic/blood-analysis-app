@@ -1,0 +1,1 @@
+print("Blood Analysis App started successfully!")
