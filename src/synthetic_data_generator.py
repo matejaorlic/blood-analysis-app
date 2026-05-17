@@ -18,7 +18,6 @@ def generate_normal_patient():
 
     return patient
 
-
 def generate_anemia_patient():
 
     patient = {
@@ -35,6 +34,37 @@ def generate_anemia_patient():
 
     return patient
 
+def generate_bacterial_patient():
+
+    patient = {
+        "WBC": round(np.random.normal(14, 2), 2),
+        "RBC": round(np.random.normal(4.7, 0.4), 2),
+        "HGB": round(np.random.normal(14, 1), 2),
+        "HCT": round(np.random.normal(42, 3), 2),
+        "PLT": round(np.random.normal(350, 60), 2),
+        "MCV": round(np.random.normal(89, 4), 2),
+        "Neutrophils": round(np.random.normal(78, 6), 2),
+        "Lymphocytes": round(np.random.normal(18, 5), 2),
+        "Class": "Bacterial"
+    }
+
+    return patient
+
+def generate_viral_patient():
+
+    patient = {
+        "WBC": round(np.random.normal(9, 1.5), 2),
+        "RBC": round(np.random.normal(4.8, 0.4), 2),
+        "HGB": round(np.random.normal(14.3, 1), 2),
+        "HCT": round(np.random.normal(43, 3), 2),
+        "PLT": round(np.random.normal(270, 50), 2),
+        "MCV": round(np.random.normal(89, 4), 2),
+        "Neutrophils": round(np.random.normal(42, 6), 2),
+        "Lymphocytes": round(np.random.normal(48, 6), 2),
+        "Class": "Viral"
+    }
+
+    return patient
 
 patients = []
 
@@ -43,6 +73,12 @@ for _ in range(100):
 
 for _ in range(100):
     patients.append(generate_anemia_patient())
+
+for _ in range(100):
+    patients.append(generate_bacterial_patient())
+
+for _ in range(100):
+    patients.append(generate_viral_patient())
 
 df = pd.DataFrame(patients)
 print(df.head())
