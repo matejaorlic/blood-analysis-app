@@ -177,6 +177,8 @@ PARAMETER_ALIASES: dict[str, list[str]] = {
 WORD_BOUNDARY_ALIASES: set[str] = {
     "Fe",
     "HB",    # "HB" is inside "HGB" and "Hemoglobin" — boundary prevents collision
+    "FER",   # "FER" matches inside "Ferozin" (iron test method name in some PDFs)
+             # \bFER\b rejects "Ferozin" because 'i' after 'r' is a word char (no boundary)
 }
 
 
@@ -220,10 +222,15 @@ WORD_BOUNDARY_ALIASES: set[str] = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 MULTILINE_PARAMETERS: set[str] = {
-    "CRP",    # "s-C-reaktivni protein\n(CRP) 3.80"
+    "CRP",    # "s-C-reaktivni protein\n(CRP) 3.80" — value is on next line
     "DIMER",  # some labs: "D-dimer\n1.24 ug FEU/mL"
-    "FER",    # some labs break "s- Feritin\n123.0"
     "FE",     # some labs: "s- Gvozdje\n15.0"
+    # NOTE: FER intentionally NOT here.
+    # In this PDF, "s- Feritin 123.0" is on one line — standard pattern works.
+    # Multiline was causing "Ferozin" (iron method name, appears just above Feritin)
+    # to match via the "FER" alias, then skip across the newline to grab "23.9"
+    # from the reference range "m: 23.9-336.2" instead of the patient value 123.0.
+    # Fix: FER moved to WORD_BOUNDARY_ALIASES (\bFER\b blocks "Ferozin" match).
 }
 
 
@@ -385,9 +392,12 @@ def extract_selected_parameters(
 
 if __name__ == "__main__":
 
-    # Realistic raw text mirroring actual pdfplumber output.
-    # CRP label and value are on DIFFERENT lines — this is the real PDF format.
-    # Gvozdje is the actual unicode string from the PDF: Gvožđe
+    # Real pdfplumber output from NALAZ_Mirjana_Orlic.pdf
+    # Key layout details that caused bugs:
+    #   - CRP label and value are on different lines
+    #   - "Ferozin" (iron test method) appears ABOVE "s- Feritin" in extracted text
+    #     and contains "Fer" — without \bFER\b it matched Ferozin and grabbed 23.9
+    #   - "m: 23.9-336.2" is the Feritin reference range, appears before the label line
     SAMPLE_TEXT = (
         "eK-Eritrociti (RBC) 4.26 1012/L 3.80-5.60\n"
         "eK-Leukociti (WBC) 10.8 109/L 4.0-10.6\n"
@@ -403,12 +413,18 @@ if __name__ == "__main__":
         "ek-LYM 2.8 109/L 1.19-3.35\n"
         "ek-MID 0.7 109/L 0.12-0.84\n"
         "ek-GRA 7.3 109/L 2.06-6.49\n"
-        "s-C-reaktivni protein \n"             # CRP label
-        "(CRP) 3.80 mg/L < 5.00\n"            # CRP value on NEXT LINE
-        "cP- D-dimer 1.24 ug FEU/mL <0.5\n"  # "FEU" contains "Fe" — must NOT match
-        "s- Glukoza 5.2 mmol/L 4.1-5.9\n"
-        "s- Gvo\u017e\u0111e 15.0 umol/L 5.8-31.7\n"  # Gvožđe (unicode)
-        "s- Feritin 123.0 ng/mL 11.0-306.8\n"          # must NOT match as FE
+        "s-C-reaktivni protein turbidimetrija\n"  # CRP label — value on next line
+        "3.80 mg/L < 5.00\n"
+        "(CRP) sa latex cest.\n"
+        "ug imunoturbidimetrija\n"
+        "cP- D-dimer 1.24 <0.5\n"                # FEU below, Fe must not match here
+        "FEU/mL sa latex cesticama\n"
+        "s- Glukoza 5.2 mmol/L 4.1-5.9 ; preko 60 god.:4.6-6.4\n"
+        "s- Gvo\u017e\u0111e 15.0 umol/L odrasli zene: 5.8-31.7\n"  # Gvožđe
+        "Ferozin\n"                               # iron method name — FER must NOT match this
+        "m: 23.9-336.2; z 11.0-306.8\n"          # Feritin ref range — must NOT be captured
+        "Referentne vrednosti su\n"
+        "s- Feritin 123.0 ng/mL prilagodjene novoj metodi CLIA\n"  # correct FER value
     )
 
     EXPECTED = {
@@ -479,6 +495,7 @@ if __name__ == "__main__":
         ("FE",  "FEU/mL <0.5",             None,  "Fe inside FEU/mL unit"),
         ("FE",  "s- Feritin 123.0 ng/mL",  None,  "Fe inside Feritin"),
         ("CRP", "CRP result < 0.5",         None,  "< before value"),
+        ("FER", "Ferozin\nm: 23.9-336.2",   None,  "FER inside Ferozin (iron method name)"),
     ]
     for param, test_text, expected, description in fp_cases:
         got = extract_parameter(test_text, param)
